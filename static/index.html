@@ -1,87 +1,963 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="tr">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SMSAI Web Chat Prototype</title>
+  <title>SMSAI — AI Chat Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-    body { font-family: Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; background: #f7f9fc; }
-    .card { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
-    #messages { height: 350px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; background: #fafafa; }
-    .msg { margin: 8px 0; padding: 8px 10px; border-radius: 8px; }
-    .user { background: #dbeafe; }
-    .bot { background: #dcfce7; white-space: pre-wrap; }
-    .meta { font-size: 12px; color: #334155; margin-top: 6px; }
-    .row { display: flex; gap: 8px; margin-top: 12px; }
-    input, textarea { padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; }
-    #userId { width: 200px; }
-    #message { flex: 1; min-height: 70px; }
-    button { background: #2563eb; color: #fff; border: 0; border-radius: 8px; padding: 10px 14px; cursor: pointer; }
+    /* ── Reset & Base ─────────────────────────────────── */
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #0d0f1a;
+      --surface: #161827;
+      --surface2: #1e2035;
+      --surface3: #252843;
+      --border: rgba(255, 255, 255, 0.07);
+      --accent: #6c63ff;
+      --accent2: #a78bfa;
+      --green: #34d399;
+      --yellow: #fbbf24;
+      --red: #f87171;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --radius: 14px;
+    }
+
+    html,
+    body {
+      height: 100%;
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    /* ── Layout ───────────────────────────────────────── */
+    .app {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ──────────────────────────────────────── */
+    .sidebar {
+      width: 260px;
+      min-width: 260px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 24px 16px;
+      gap: 24px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .logo-text {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .logo-text span {
+      color: var(--accent2);
+    }
+
+    .sidebar-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* User ID input */
+    .user-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .user-input {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 14px;
+      outline: none;
+      transition: border-color .2s;
+      width: 100%;
+    }
+
+    .user-input:focus {
+      border-color: var(--accent);
+    }
+
+    /* Budget */
+    .budget-section {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .budget-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .budget-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .budget-header .val {
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 5px;
+      border-radius: 99px;
+      background: var(--surface3);
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: 99px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      transition: width .5s ease;
+    }
+
+    .progress-fill.warn {
+      background: linear-gradient(90deg, var(--yellow), #f59e0b);
+    }
+
+    .progress-fill.danger {
+      background: linear-gradient(90deg, var(--red), #ef4444);
+    }
+
+    /* Stats */
+    .stats-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: auto;
+    }
+
+    .stat-card {
+      background: var(--surface2);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .stat-val {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .stat-lbl {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    /* Tabs */
+    .tab-row {
+      display: flex;
+      gap: 4px;
+      background: var(--surface2);
+      border-radius: 10px;
+      padding: 4px;
+    }
+
+    .tab {
+      flex: 1;
+      text-align: center;
+      padding: 7px 0;
+      border-radius: 7px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--muted);
+      transition: all .2s;
+    }
+
+    .tab.active {
+      background: var(--surface3);
+      color: var(--text);
+    }
+
+    /* ── Main ─────────────────────────────────────────── */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Chat Header ──────────────────────────────────── */
+    .chat-header {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1
+      }
+
+      50% {
+        opacity: .4
+      }
+    }
+
+    .chat-title {
+      font-weight: 600;
+    }
+
+    .chat-subtitle {
+      font-size: 12px;
+      color: var(--muted);
+      margin-left: auto;
+    }
+
+    /* ── Messages ─────────────────────────────────────── */
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      scroll-behavior: smooth;
+    }
+
+    #messages::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    #messages::-webkit-scrollbar-thumb {
+      background: var(--surface3);
+      border-radius: 4px;
+    }
+
+    /* Welcome screen */
+    .welcome {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 16px;
+      opacity: .6;
+    }
+
+    .welcome-icon {
+      font-size: 48px;
+    }
+
+    .welcome h3 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .welcome p {
+      font-size: 14px;
+      color: var(--muted);
+      text-align: center;
+      max-width: 280px;
+    }
+
+    /* Message bubble */
+    .msg-row {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      max-width: 85%;
+    }
+
+    .msg-row.user {
+      margin-left: auto;
+      flex-direction: row-reverse;
+    }
+
+    .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .avatar.ai {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+    }
+
+    .avatar.user {
+      background: var(--surface3);
+      border: 1px solid var(--border);
+    }
+
+    .bubble {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .bubble-text {
+      padding: 12px 16px;
+      border-radius: 16px;
+      line-height: 1.6;
+      font-size: 14px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .msg-row.user .bubble-text {
+      background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+
+    .msg-row.ai .bubble-text {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-bottom-left-radius: 4px;
+    }
+
+    /* Badge row */
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 9px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 500;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .badge.model {
+      background: rgba(108, 99, 255, .15);
+      color: var(--accent2);
+    }
+
+    .badge.lang {
+      background: rgba(52, 211, 153, .12);
+      color: var(--green);
+    }
+
+    .badge.intent {
+      background: rgba(251, 191, 36, .12);
+      color: var(--yellow);
+    }
+
+    .badge.complexity {
+      background: rgba(248, 113, 113, .12);
+      color: var(--red);
+    }
+
+    .badge.tokens {
+      background: rgba(255, 255, 255, .06);
+      color: var(--muted);
+    }
+
+    .msg-time {
+      font-size: 11px;
+      color: var(--muted);
+      padding: 0 4px;
+    }
+
+    /* Typing indicator */
+    .typing-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .typing-bubble {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      border-bottom-left-radius: 4px;
+      padding: 12px 18px;
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--muted);
+      animation: bounce 1.2s infinite ease-in-out;
+    }
+
+    .dot:nth-child(2) {
+      animation-delay: .2s;
+    }
+
+    .dot:nth-child(3) {
+      animation-delay: .4s;
+    }
+
+    @keyframes bounce {
+
+      0%,
+      80%,
+      100% {
+        transform: translateY(0)
+      }
+
+      40% {
+        transform: translateY(-6px)
+      }
+    }
+
+    /* ── Input Area ───────────────────────────────────── */
+    .input-area {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+    }
+
+    .textarea-wrap {
+      flex: 1;
+      position: relative;
+    }
+
+    #msgInput {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 16px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 14px;
+      resize: none;
+      outline: none;
+      min-height: 48px;
+      max-height: 160px;
+      line-height: 1.5;
+      transition: border-color .2s;
+    }
+
+    #msgInput:focus {
+      border-color: var(--accent);
+    }
+
+    #msgInput::placeholder {
+      color: var(--muted);
+    }
+
+    .send-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      border: none;
+      cursor: pointer;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform .15s, box-shadow .2s;
+      flex-shrink: 0;
+    }
+
+    .send-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 20px rgba(108, 99, 255, .4);
+    }
+
+    .send-btn:active {
+      transform: translateY(0);
+    }
+
+    .send-btn svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .input-hint {
+      font-size: 11px;
+      color: var(--muted);
+      text-align: center;
+      padding: 0 0 4px;
+    }
+
+    /* ── Dashboard ────────────────────────────────────── */
+    #dashView {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: none;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .dash-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+    }
+
+    .dash-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+
+    .dash-card-label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .dash-card-value {
+      font-size: 28px;
+      font-weight: 700;
+    }
+
+    .dash-card-sub {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .model-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .model-table th {
+      text-align: left;
+      padding: 8px 12px;
+      color: var(--muted);
+      font-weight: 500;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .model-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .model-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
   </style>
 </head>
+
 <body>
-  <div class="card">
-    <h2>SMSAI Prototype • Web Chat</h2>
-    <p>Multi-model routing + classification + token budget tracking.</p>
-    <div id="messages"></div>
-    <div class="row">
-      <input id="userId" placeholder="user id" value="demo-user" />
-      <textarea id="message" placeholder="Type in any language..."></textarea>
-      <button id="sendBtn">Send</button>
-    </div>
+  <div class="app">
+
+    <!-- ── Sidebar ── -->
+    <aside class="sidebar">
+      <div class="logo">
+        <div class="logo-icon">🤖</div>
+        <div class="logo-text">SMS<span>AI</span></div>
+      </div>
+
+      <div class="tab-row">
+        <div class="tab active" id="tabChat" onclick="switchTab('chat')">💬 Chat</div>
+        <div class="tab" id="tabDash" onclick="switchTab('dash')">📊 Stats</div>
+      </div>
+
+      <div class="user-section">
+        <div class="sidebar-label">User ID</div>
+        <input id="userId" class="user-input" placeholder="Enter user ID..." value="demo-user" />
+      </div>
+
+      <div class="budget-section">
+        <div class="sidebar-label">Token Budget</div>
+        <div class="budget-item">
+          <div class="budget-header">
+            <span>Your Tokens</span>
+            <span class="val" id="budgetUserVal">0 / 6000</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="budgetUserBar" style="width:0%"></div>
+          </div>
+        </div>
+        <div class="budget-item">
+          <div class="budget-header">
+            <span>Global Tokens</span>
+            <span class="val" id="budgetGlobalVal">—</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="budgetGlobalBar" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats-section">
+        <div class="sidebar-label">Session</div>
+        <div class="stat-card">
+          <div class="stat-val" id="sideStatMsgs">0</div>
+          <div class="stat-lbl">Messages sent</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="sideStatCost">$0.000000</div>
+          <div class="stat-lbl">Estimated cost</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ── Main Area ── -->
+    <main class="main">
+
+      <!-- Chat Header -->
+      <div class="chat-header">
+        <div class="status-dot"></div>
+        <div class="chat-title">SMSAI Assistant</div>
+        <div class="chat-subtitle" id="headerModel">Powered by Google Gemini</div>
+      </div>
+
+      <!-- Chat View -->
+      <div id="chatView" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+        <div id="messages">
+          <div class="welcome" id="welcomeMsg">
+            <div class="welcome-icon">🤖</div>
+            <h3>Welcome to SMSAI</h3>
+            <p>Akıllı çok-model yönlendirme ile sorularınızı yanıtlayan AI asistanınız.</p>
+          </div>
+        </div>
+        <div class="input-hint">Enter: gönder · Shift+Enter: yeni satır</div>
+        <div class="input-area">
+          <div class="textarea-wrap">
+            <textarea id="msgInput" placeholder="Mesajınızı yazın... (TR / EN / ES)" rows="1"></textarea>
+          </div>
+          <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13" />
+              <polygon points="22 2 15 22 11 13 2 9 22 2" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Dashboard View -->
+      <div id="dashView">
+        <h2 style="font-size:18px;font-weight:600;">Global Statistics</h2>
+        <div class="dash-grid">
+          <div class="dash-card">
+            <div class="dash-card-label">Total Requests</div>
+            <div class="dash-card-value" id="dTotalReq">—</div>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-label">Total Tokens</div>
+            <div class="dash-card-value" id="dTotalTok">—</div>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-label">Total Cost</div>
+            <div class="dash-card-value" id="dTotalCost">—</div>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-label">Unique Users</div>
+            <div class="dash-card-value" id="dUniqueUsers">—</div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="model-table">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>Requests</th>
+                <th>Tokens</th>
+              </tr>
+            </thead>
+            <tbody id="dModelTable"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
   </div>
 
   <script>
-    const messages = document.getElementById('messages');
-    const userIdEl = document.getElementById('userId');
-    const messageEl = document.getElementById('message');
-    const sendBtn = document.getElementById('sendBtn');
+    // ── State ──────────────────────────────────────────────────────────────────
+    let sessionMsgs = 0;
+    let sessionCost = 0;
 
-    function append(text, cls, meta = '') {
-      const div = document.createElement('div');
-      div.className = `msg ${cls}`;
-      div.textContent = text;
-      if (meta) {
-        const m = document.createElement('div');
-        m.className = 'meta';
-        m.textContent = meta;
-        div.appendChild(m);
-      }
-      messages.appendChild(div);
-      messages.scrollTop = messages.scrollHeight;
+    // ── Util ───────────────────────────────────────────────────────────────────
+    function fmtTime(ts) {
+      const d = ts ? new Date(ts * 1000) : new Date();
+      return d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
     }
 
-    async function sendMessage() {
-      const user_id = userIdEl.value.trim();
-      const message = messageEl.value.trim();
-      if (!user_id || !message) return;
+    function intentColor(intent) {
+      const m = { technical_support: '🔧', pricing: '💰', complaint: '😤', feedback: '💡', general_qa: '💬' };
+      return m[intent] || '💬';
+    }
 
-      append(message, 'user', `user=${user_id}`);
-      messageEl.value = '';
+    function langFlag(lang) {
+      const m = { tr: '🇹🇷', en: '🇬🇧', es: '🇪🇸' };
+      return m[lang] || '🌐';
+    }
+
+    function complexColor(c) {
+      return { low: '#34d399', medium: '#fbbf24', high: '#f87171' }[c] || '#94a3b8';
+    }
+
+    // ── Tab switching ──────────────────────────────────────────────────────────
+    function switchTab(tab) {
+      document.getElementById('tabChat').classList.toggle('active', tab === 'chat');
+      document.getElementById('tabDash').classList.toggle('active', tab === 'dash');
+      document.getElementById('chatView').style.display = tab === 'chat' ? 'flex' : 'none';
+      document.getElementById('dashView').style.display = tab === 'dash' ? 'flex' : 'none';
+      if (tab === 'dash') loadStats();
+    }
+
+    // ── Messages ───────────────────────────────────────────────────────────────
+    const msgContainer = document.getElementById('messages');
+
+    function removeWelcome() {
+      const w = document.getElementById('welcomeMsg');
+      if (w) w.remove();
+    }
+
+    function appendUser(text) {
+      removeWelcome();
+      const row = document.createElement('div');
+      row.className = 'msg-row user';
+      row.innerHTML = `
+    <div class="avatar user">👤</div>
+    <div class="bubble">
+      <div class="bubble-text">${escHtml(text)}</div>
+      <div class="msg-time">${fmtTime()}</div>
+    </div>`;
+      msgContainer.appendChild(row);
+      msgContainer.scrollTop = msgContainer.scrollHeight;
+    }
+
+    function showTyping() {
+      removeWelcome();
+      const row = document.createElement('div');
+      row.className = 'typing-row'; row.id = 'typingIndicator';
+      row.innerHTML = `
+    <div class="avatar ai">🤖</div>
+    <div class="typing-bubble"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
+      msgContainer.appendChild(row);
+      msgContainer.scrollTop = msgContainer.scrollHeight;
+    }
+
+    function removeTyping() {
+      const t = document.getElementById('typingIndicator');
+      if (t) t.remove();
+    }
+
+    function appendAI(text, data) {
+      const c = data.classification || {};
+      const u = data.usage || {};
+      const row = document.createElement('div');
+      row.className = 'msg-row ai';
+      row.innerHTML = `
+    <div class="avatar ai">🤖</div>
+    <div class="bubble">
+      <div class="bubble-text">${escHtml(text)}</div>
+      <div class="badges">
+        <span class="badge model">⚡ ${data.model_label || data.selected_model}</span>
+        <span class="badge lang">${langFlag(c.language)} ${c.language}</span>
+        <span class="badge intent">${intentColor(c.intent)} ${c.intent}</span>
+        <span class="badge complexity" style="color:${complexColor(c.complexity)}">◈ ${c.complexity}</span>
+        <span class="badge tokens">🔢 ${u.total_tokens || 0} tokens · $${(u.estimated_cost_usd || 0).toFixed(6)}</span>
+      </div>
+      <div class="msg-time">${fmtTime()}</div>
+    </div>`;
+      msgContainer.appendChild(row);
+      msgContainer.scrollTop = msgContainer.scrollHeight;
+    }
+
+    function appendError(text) {
+      const row = document.createElement('div');
+      row.className = 'msg-row ai';
+      row.innerHTML = `
+    <div class="avatar ai">🤖</div>
+    <div class="bubble">
+      <div class="bubble-text" style="color:var(--red);">⚠️ ${escHtml(text)}</div>
+    </div>`;
+      msgContainer.appendChild(row);
+      msgContainer.scrollTop = msgContainer.scrollHeight;
+    }
+
+    function escHtml(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+    }
+
+    // ── Budget ─────────────────────────────────────────────────────────────────
+    function updateBudget(budgets) {
+      if (!budgets) return;
+      const uUsed = budgets.user_tokens_used || 0;
+      const uLimit = budgets.user_token_limit || 6000;
+      const uPct = Math.min(100, (uUsed / uLimit) * 100);
+      document.getElementById('budgetUserVal').textContent = `${uUsed} / ${uLimit}`;
+      const uBar = document.getElementById('budgetUserBar');
+      uBar.style.width = uPct + '%';
+      uBar.className = 'progress-fill' + (uPct > 80 ? ' danger' : uPct > 60 ? ' warn' : '');
+
+      const gUsed = budgets.global_tokens_used || 0;
+      const gLimit = (budgets.global_tokens_left || 0) + gUsed;
+      const gPct = gLimit ? Math.min(100, (gUsed / gLimit) * 100) : 0;
+      document.getElementById('budgetGlobalVal').textContent = `${gUsed.toLocaleString()} / ${gLimit.toLocaleString()}`;
+      const gBar = document.getElementById('budgetGlobalBar');
+      gBar.style.width = gPct + '%';
+      gBar.className = 'progress-fill' + (gPct > 80 ? ' danger' : gPct > 60 ? ' warn' : '');
+    }
+
+    // ── Send ───────────────────────────────────────────────────────────────────
+    async function sendMessage() {
+      const userId = document.getElementById('userId').value.trim();
+      const input = document.getElementById('msgInput');
+      const text = input.value.trim();
+      if (!userId || !text) return;
+
+      appendUser(text);
+      input.value = '';
+      input.style.height = 'auto';
+      showTyping();
+      document.getElementById('sendBtn').disabled = true;
 
       try {
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_id, message })
+          body: JSON.stringify({ user_id: userId, message: text }),
         });
         const data = await res.json();
+        removeTyping();
+
         if (!res.ok) {
-          append(`Error: ${data.detail || 'Unknown error'}`, 'bot');
+          appendError(data.detail || 'Bilinmeyen hata');
           return;
         }
 
-        append(
-          data.answer,
-          'bot',
-          `model=${data.selected_model}, lang=${data.classification.language}, tokens=${data.usage.total_tokens}, user_left=${data.budgets.user_tokens_left}`
-        );
+        appendAI(data.answer, data);
+        updateBudget(data.budgets);
+
+        sessionMsgs++;
+        sessionCost += (data.usage?.estimated_cost_usd || 0);
+        document.getElementById('sideStatMsgs').textContent = sessionMsgs;
+        document.getElementById('sideStatCost').textContent = '$' + sessionCost.toFixed(6);
+        document.getElementById('headerModel').textContent = '⚡ ' + (data.model_label || data.selected_model);
       } catch (e) {
-        append(`Network error: ${e.message}`, 'bot');
+        removeTyping();
+        appendError('Network error: ' + e.message);
+      } finally {
+        document.getElementById('sendBtn').disabled = false;
+        input.focus();
       }
     }
 
-    sendBtn.addEventListener('click', sendMessage);
+    // ── Auto-resize textarea ───────────────────────────────────────────────────
+    const msgInput = document.getElementById('msgInput');
+    msgInput.addEventListener('input', () => {
+      msgInput.style.height = 'auto';
+      msgInput.style.height = Math.min(msgInput.scrollHeight, 160) + 'px';
+    });
+    msgInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    });
+
+    // ── Dashboard ──────────────────────────────────────────────────────────────
+    async function loadStats() {
+      try {
+        const res = await fetch('/api/stats');
+        const data = await res.json();
+        document.getElementById('dTotalReq').textContent = data.total_requests || 0;
+        document.getElementById('dTotalTok').textContent = (data.total_tokens || 0).toLocaleString();
+        document.getElementById('dTotalCost').textContent = '$' + (data.total_cost_usd || 0).toFixed(4);
+        document.getElementById('dUniqueUsers').textContent = data.unique_users || 0;
+
+        const tbody = document.getElementById('dModelTable');
+        tbody.innerHTML = (data.model_breakdown || []).map(m =>
+          `<tr><td>${m.model}</td><td>${m.count}</td><td>${(m.tokens || 0).toLocaleString()}</td></tr>`
+        ).join('') || '<tr><td colspan="3" style="color:var(--muted);text-align:center;padding:20px">No data yet</td></tr>';
+      } catch (e) {
+        console.error('Stats load error', e);
+      }
+    }
+
+    // ── Init ───────────────────────────────────────────────────────────────────
+    // Restore user ID from localStorage
+    const savedId = localStorage.getItem('smsai_user_id');
+    if (savedId) document.getElementById('userId').value = savedId;
+    document.getElementById('userId').addEventListener('change', e => {
+      localStorage.setItem('smsai_user_id', e.target.value);
+    });
   </script>
 </body>
+
 </html>

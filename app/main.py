@@ -1,114 +1,38 @@
+"""
+main.py — SMSAI HTTP sunucusu. Tüm iş mantığı ayrı modüllerde.
+"""
 from __future__ import annotations
 
 import json
-import re
-import time
-from collections import defaultdict
-from dataclasses import asdict, dataclass
+import os
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Tuple
 
-USER_TOKEN_LIMIT = 6_000
-GLOBAL_TOKEN_LIMIT = 120_000
+# Proje kökünü path'e ekle (doğrudan çalıştırma için)
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from dotenv import load_dotenv
+load_dotenv(ROOT / ".env")
+
+from app.classifier import classify_message
+from app.router import select_model, model_cost_per_1k, model_label, generate_response
+from app.storage import (
+    init_db, log_usage, get_usage_log, get_stats,
+    save_message, get_history,
+    get_user_token_usage, get_global_token_usage,
+)
+from app.budget import estimate_tokens, assert_budget, USER_TOKEN_LIMIT, GLOBAL_TOKEN_LIMIT
+
+# Veritabanını başlat
+init_db()
 
 
-@dataclass
-class ClassificationResult:
-    language: str
-    complexity: str
-    intent: str
-    domain: str
-
-
-usage_log: List[dict] = []
-user_token_usage: Dict[str, int] = defaultdict(int)
-global_token_usage = 0
-
-
-def estimate_tokens(text: str) -> int:
-    words = len(text.split())
-    return max(1, int(words * 1.3))
-
-
-def detect_language(text: str) -> str:
-    lower = text.lower()
-    if re.search(r"\b(merhaba|nasılsın|teşekkür|şu|nedir|nasıl)\b", lower):
-        return "tr"
-    if re.search(r"\b(hola|gracias|por qué|cómo)\b", lower):
-        return "es"
-    return "en"
-
-
-def classify_message(message: str) -> ClassificationResult:
-    lower = message.lower()
-    language = detect_language(message)
-
-    if any(k in lower for k in ["hata", "error", "bug", "çalışmıyor", "issue"]):
-        intent = "technical_support"
-        domain = "technology"
-    elif any(k in lower for k in ["fiyat", "price", "plan", "subscription"]):
-        intent = "pricing"
-        domain = "business"
-    else:
-        intent = "general_qa"
-        domain = "general"
-
-    if len(message) > 300 or "adım adım" in lower or "step by step" in lower:
-        complexity = "high"
-    elif len(message) > 120:
-        complexity = "medium"
-    else:
-        complexity = "low"
-
-    return ClassificationResult(language=language, complexity=complexity, intent=intent, domain=domain)
-
-
-def select_model(c: ClassificationResult) -> str:
-    if c.complexity == "high":
-        return "quality-model-v2"
-    if c.language not in {"en", "tr"}:
-        return "multilingual-model-v1"
-    return "fast-model-v1"
-
-
-def model_cost_per_1k(model_name: str) -> float:
-    return {
-        "fast-model-v1": 0.0006,
-        "multilingual-model-v1": 0.0012,
-        "quality-model-v2": 0.003,
-    }.get(model_name, 0.001)
-
-
-def generate_response(message: str, c: ClassificationResult, model: str) -> str:
-    prefix = {"tr": "Yanıt", "es": "Respuesta", "en": "Answer"}.get(c.language, "Answer")
-
-    if c.intent == "technical_support":
-        guidance = "Please share expected behavior, actual behavior, and logs for faster support."
-    elif c.intent == "pricing":
-        guidance = "Start with a small token budget and scale after observing usage."
-    else:
-        guidance = "Here is a concise response tailored to your question."
-
-    return (
-        f"{prefix} ({model}): {guidance}\n"
-        f"Detected language={c.language}, complexity={c.complexity}, intent={c.intent}.\n"
-        f"Question summary: {message[:220]}"
-    )
-
-
-def assert_budget(user_id: str, request_tokens: int) -> Tuple[bool, str]:
-    if user_token_usage[user_id] + request_tokens > USER_TOKEN_LIMIT:
-        return False, "User token limit exceeded"
-    if global_token_usage + request_tokens > GLOBAL_TOKEN_LIMIT:
-        return False, "Global token budget exhausted"
-    return True, ""
-
+# ─── Chat İşleyici ────────────────────────────────────────────────────────────
 
 def handle_chat(payload: dict) -> Tuple[int, dict]:
-    global global_token_usage
-
     user_id = str(payload.get("user_id", "")).strip()
     message = str(payload.get("message", "")).strip()
     if not user_id or not message:
@@ -118,53 +42,84 @@ def handle_chat(payload: dict) -> Tuple[int, dict]:
     model = select_model(c)
 
     input_tokens = estimate_tokens(message)
-    reserved_output = 180 if c.complexity == "high" else 90
+    reserved_output = 300 if c.complexity == "high" else 150
     ok, detail = assert_budget(user_id, input_tokens + reserved_output)
     if not ok:
         return 402, {"detail": detail}
 
-    answer = generate_response(message, c, model)
+    # Konuşma geçmişini çek
+    history = get_history(user_id, limit=10)
+
+    # Yanıt üret
+    answer = generate_response(message, c, model, history)
     output_tokens = estimate_tokens(answer)
     total = input_tokens + output_tokens
 
+    # Budget ikinci kontrol (gerçek output sonrası)
     ok, detail = assert_budget(user_id, total)
     if not ok:
         return 402, {"detail": detail}
 
-    user_token_usage[user_id] += total
-    global_token_usage += total
+    cost = round((total / 1000) * model_cost_per_1k(model), 6)
 
-    usage = {
-        "user_id": user_id,
-        "model": model,
-        "input_tokens": input_tokens,
-        "output_tokens": output_tokens,
-        "total_tokens": total,
-        "estimated_cost_usd": round((total / 1000) * model_cost_per_1k(model), 6),
-        "timestamp": time.time(),
-    }
-    usage_log.append(usage)
+    # Kayıt
+    save_message(user_id, "user", message)
+    save_message(user_id, "assistant", answer)
+    log_usage(
+        user_id=user_id,
+        model=model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total,
+        estimated_cost_usd=cost,
+        language=c.language,
+        intent=c.intent,
+        complexity=c.complexity,
+    )
+
+    user_used = get_user_token_usage(user_id)
+    global_used = get_global_token_usage()
 
     return 200, {
         "answer": answer,
-        "classification": asdict(c),
+        "classification": {
+            "language": c.language,
+            "complexity": c.complexity,
+            "intent": c.intent,
+            "domain": c.domain,
+        },
         "selected_model": model,
-        "usage": usage,
+        "model_label": model_label(model),
+        "usage": {
+            "user_id": user_id,
+            "model": model,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": total,
+            "estimated_cost_usd": cost,
+        },
         "budgets": {
-            "user_tokens_used": user_token_usage[user_id],
-            "user_tokens_left": USER_TOKEN_LIMIT - user_token_usage[user_id],
-            "global_tokens_used": global_token_usage,
-            "global_tokens_left": GLOBAL_TOKEN_LIMIT - global_token_usage,
+            "user_tokens_used": user_used,
+            "user_tokens_left": max(0, USER_TOKEN_LIMIT - user_used),
+            "user_token_limit": USER_TOKEN_LIMIT,
+            "global_tokens_used": global_used,
+            "global_tokens_left": max(0, GLOBAL_TOKEN_LIMIT - global_used),
         },
     }
 
 
+# ─── HTTP Sunucu ──────────────────────────────────────────────────────────────
+
 class AppHandler(BaseHTTPRequestHandler):
+    def log_message(self, format: str, *args) -> None:  # suppress default logs
+        pass
+
     def _send_json(self, status: int, payload: dict | list) -> None:
-        body = json.dumps(payload).encode("utf-8")
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(body)
 
@@ -179,33 +134,53 @@ class AppHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _read_json_body(self) -> dict | None:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            raw = self.rfile.read(length)
+            return json.loads(raw.decode("utf-8"))
+        except (ValueError, json.JSONDecodeError):
+            return None
+
+    def do_OPTIONS(self) -> None:  # noqa: N802
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+
     def do_GET(self) -> None:  # noqa: N802
         if self.path == "/":
             return self._send_file(ROOT / "static" / "index.html", "text/html; charset=utf-8")
         if self.path == "/api/usage":
-            return self._send_json(200, usage_log[-200:])
+            return self._send_json(200, get_usage_log(200))
+        if self.path == "/api/stats":
+            return self._send_json(200, get_stats())
+        if self.path.startswith("/api/history/"):
+            uid = self.path.split("/api/history/", 1)[-1]
+            return self._send_json(200, get_history(uid, 50))
         self.send_error(404)
 
     def do_POST(self) -> None:  # noqa: N802
         if self.path != "/api/chat":
             self.send_error(404)
             return
-
-        try:
-            content_length = int(self.headers.get("Content-Length", "0"))
-            raw_body = self.rfile.read(content_length)
-            payload = json.loads(raw_body.decode("utf-8"))
-        except (ValueError, json.JSONDecodeError):
+        payload = self._read_json_body()
+        if payload is None:
             self._send_json(400, {"detail": "Invalid JSON payload"})
             return
-
         status, response = handle_chat(payload)
         self._send_json(status, response)
 
 
 def run_server(host: str = "127.0.0.1", port: int = 8000) -> None:
     server = ThreadingHTTPServer((host, port), AppHandler)
-    print(f"Server running at http://{host}:{port}")
+    print(f"🚀 SMSAI running at http://{host}:{port}")
+    print(f"   Chat UI   → http://{host}:{port}/")
+    print(f"   Chat API  → POST http://{host}:{port}/api/chat")
+    print(f"   Usage     → GET  http://{host}:{port}/api/usage")
+    print(f"   Stats     → GET  http://{host}:{port}/api/stats")
+    print(f"   History   → GET  http://{host}:{port}/api/history/{{user_id}}")
     server.serve_forever()
 
 

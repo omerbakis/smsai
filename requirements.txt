@@ -1,1 +1,2 @@
-# No third-party dependencies required for this prototype.
+google-genai>=1.0.0
+python-dotenv>=1.0.0
