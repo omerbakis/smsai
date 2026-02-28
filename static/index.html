@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SMSAI Web Chat Prototype</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; background: #f7f9fc; }
+    .card { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+    #messages { height: 350px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; background: #fafafa; }
+    .msg { margin: 8px 0; padding: 8px 10px; border-radius: 8px; }
+    .user { background: #dbeafe; }
+    .bot { background: #dcfce7; white-space: pre-wrap; }
+    .meta { font-size: 12px; color: #334155; margin-top: 6px; }
+    .row { display: flex; gap: 8px; margin-top: 12px; }
+    input, textarea { padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; }
+    #userId { width: 200px; }
+    #message { flex: 1; min-height: 70px; }
+    button { background: #2563eb; color: #fff; border: 0; border-radius: 8px; padding: 10px 14px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>SMSAI Prototype • Web Chat</h2>
+    <p>Multi-model routing + classification + token budget tracking.</p>
+    <div id="messages"></div>
+    <div class="row">
+      <input id="userId" placeholder="user id" value="demo-user" />
+      <textarea id="message" placeholder="Type in any language..."></textarea>
+      <button id="sendBtn">Send</button>
+    </div>
+  </div>
+
+  <script>
+    const messages = document.getElementById('messages');
+    const userIdEl = document.getElementById('userId');
+    const messageEl = document.getElementById('message');
+    const sendBtn = document.getElementById('sendBtn');
+
+    function append(text, cls, meta = '') {
+      const div = document.createElement('div');
+      div.className = `msg ${cls}`;
+      div.textContent = text;
+      if (meta) {
+        const m = document.createElement('div');
+        m.className = 'meta';
+        m.textContent = meta;
+        div.appendChild(m);
+      }
+      messages.appendChild(div);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const user_id = userIdEl.value.trim();
+      const message = messageEl.value.trim();
+      if (!user_id || !message) return;
+
+      append(message, 'user', `user=${user_id}`);
+      messageEl.value = '';
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id, message })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          append(`Error: ${data.detail || 'Unknown error'}`, 'bot');
+          return;
+        }
+
+        append(
+          data.answer,
+          'bot',
+          `model=${data.selected_model}, lang=${data.classification.language}, tokens=${data.usage.total_tokens}, user_left=${data.budgets.user_tokens_left}`
+        );
+      } catch (e) {
+        append(`Network error: ${e.message}`, 'bot');
+      }
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+  </script>
+</body>
+</html>
